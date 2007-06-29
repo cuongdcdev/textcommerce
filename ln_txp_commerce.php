@@ -1,47 +1,11 @@
 <?php
 
-// This is a PLUGIN TEMPLATE.
+// checks if all tables exists and everything is setup properly
+ln_txp_commerce_install();
 
-// Copy this file to a new name like abc_myplugin.php.  Edit the code, then
-// run this file at the command line to produce a plugin for distribution:
-// $ php abc_myplugin.php > abc_myplugin-0.1.txt
-
-// Plugin name is optional.  If unset, it will be extracted from the current
-// file name. Uncomment and edit this line to override:
-# $plugin['name'] = 'abc_plugin';
-
-$plugin['version'] = '0.0.6.7';
-$plugin['author'] = 'Levi Nunnink';
-$plugin['author_uri'] = 'http://culturezoo.com/nwa';
-$plugin['description'] = 'An e-commerce extension for the TXP admin interface.';
-$plugin['type'] = 1; // 0 for regular plugin; 1 if it includes admin-side code
-
-if(isset($_GET['build'])){
-@include_once($_SERVER['DOCUMENT_ROOT'].'/TextCommerce/plugins/subplugins/zem_tpl.php');
-}
-if (0) {
-?>
-# --- BEGIN PLUGIN HELP ---
-
-h1. Visit "http://homeplatewp.com/TextPattern/":http://homeplatewp.com/TextPattern/ for help documentation.
-
-# --- END PLUGIN HELP ---
-<?php
-}
-
-# --- BEGIN PLUGIN CODE ---
-
-// ----------------------------------------------------
-// Example public side tags
-
-
-	
-
-// ----------------------------------------------------
-// Example admin side plugin
 error_reporting(E_ERROR);
-global $vars, $statuses;
 
+global $vars, $statuses;
 
 $vars = array(
 	'ID','Title','Title_html','Body','Body_html','Excerpt','textile_excerpt','Image',
@@ -69,6 +33,10 @@ $statuses = array(
 	// Add a new tab to the Content area.
 	// "test" is the name of the associated event; "testing" is the displayed title
 	if (@txpinterface == 'admin') {
+		
+		// add our tab
+		ob_start('ln_txp_commerce_tab');
+		
 		//tabs
 		$store_categories_event = 'store_categories';
 		$categories_name = 'Categories';
@@ -354,8 +322,8 @@ $statuses = array(
 		//==================================
 		//print_r($prefs);
 
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/prototype.js"></script>';
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/scriptaculous.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/prototype.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/scriptaculous.js"></script>';
 
 		$step = "update";
 
@@ -2134,8 +2102,8 @@ $statuses = array(
 
 		$dir = ($dir == 'desc') ? 'desc' : 'asc';
 
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/prototype.js"></script>';
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/scriptaculous.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/prototype.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/scriptaculous.js"></script>';
 
 		switch ($sort)
 		{
@@ -2581,8 +2549,8 @@ $statuses = array(
 		//JS INCLUDES
 		//==================================
 		//print_r($prefs);
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/prototype.js"></script>';
-		echo '<script type="text/javascript" src="http://'.$siteurl.'/js/scriptaculous.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/prototype.js"></script>';
+		echo '<script type="text/javascript" src="http://'.$siteurl.'/scripts/scriptaculous/scriptaculous.js"></script>';
 
 		//CSS FOR PRODUCT DISPLAY
 		//==================================
@@ -3964,6 +3932,897 @@ function upload_image($image_tmp_path, $image_num, $ID){
 	
 }
 
-# --- END PLUGIN CODE ---
+// -------------------------------------------------------------
+// adds our tab so that we don't have to hack txplib_head.php
+function ln_txp_commerce_tab($buffer)
+{
+	$find = '<td class="tabdown" onclick="window.location.href=\'?event=page\'">';
+	$class = ( in_array($GLOBALS['event'], array('store_categories', 'product', 'products', 'customer', 'customers', 'orders', 'settings', 'store')) ) ? 'tabup' : 'tabdown';
+	$replace = '<td class="'.$class.'" onclick="window.location.href=\'?event=store\'"><a href="?event=store" class="plain">Store</a></td>'.$find;
+
+	return str_replace($find, $replace, $buffer);
+}
+
+// -------------------------------------------------------------
+// checks if all tables exists and everything is setup properly
+function ln_txp_commerce_install()
+{
+	global $prefs;
+	
+	$sql_query = ''; // initializing...
+	
+	// if we don't have the orders table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."orders'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE `".PFX."orders` (
+			
+				`id` int(11) NOT NULL auto_increment,
+
+				`subtotal` double default NULL,
+
+				`user_id` int(11) default NULL,
+
+				`tax` double default NULL,
+
+				`transaction_id` varchar(200) default NULL,
+
+				`tracking_number` varchar(200) default NULL,
+
+				`last_updated` timestamp NOT NULL default '0000-00-00 00:00:00' on update CURRENT_TIMESTAMP,
+
+				`order_status` varchar(80) NOT NULL default '',
+
+				`ship_date` date NOT NULL default '0000-00-00',
+
+				`ship_method` varchar(80) NOT NULL default '',
+
+				`memo` varchar(250) NOT NULL default '',
+
+				`note` text NOT NULL,
+
+				`shipping_handling` double NOT NULL default '0',
+
+				`discount` double NOT NULL default '0',
+
+				`total` double NOT NULL default '0',
+
+				`date_created` datetime NOT NULL default '0000-00-00 00:00:00',
+
+				PRIMARY KEY  (`id`)
+				
+			)";
+	}
+	
+	// if we don't have the orders_articles table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."orders_articles'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE `".PFX."orders_articles` (
+			
+				`order_id` int(11) default NULL,
+
+				`article_id` int(11) default NULL
+				
+			)";
+	}
+	
+	// if txp_users doesn't have the columns we need, let's create them.
+	if ( !getRows("SELECT billing_company FROM `txp_users`") )
+	{
+		$sql_query[] = "
+		
+			ALTER TABLE `txp_users` 
+
+				ADD `billing_company` varchar(200) NOT NULL default '',
+
+				ADD `billing_address1` varchar(200) NOT NULL default '',
+
+				ADD `billing_address2` varchar(200) NOT NULL default '',
+
+				ADD `billing_city` varchar(200) NOT NULL default '',
+
+				ADD `billing_state` varchar(50) NOT NULL default '',
+
+				ADD `billing_zip` varchar(14) NOT NULL default '',
+					
+				ADD `billing_country` varchar(100) NOT NULL default '',
+
+				ADD `billing_fax` varchar(14) NOT NULL default '',
+
+				ADD `billing_phone` varchar(14) NOT NULL default '',
+
+				ADD `shipping_same_as_billing` tinyint(1) NOT NULL default '0',
+
+				ADD `shipping_company` varchar(200) NOT NULL default '',
+
+				ADD `shipping_address1` varchar(200) NOT NULL default '',
+
+				ADD `shipping_address2` varchar(200) NOT NULL default '',
+
+				ADD `shipping_city` varchar(100) NOT NULL default '',
+
+				ADD `shipping_state` varchar(100) NOT NULL default '',
+
+				ADD `shipping_zip` varchar(14) NOT NULL default '',
+
+				ADD `shipping_country` varchar(100) NOT NULL default '',
+
+				ADD `shipping_fax` varchar(20) NOT NULL default '',
+
+				ADD `shipping_phone` varchar(20) NOT NULL default '',
+
+				ADD `shipping_firstname` varchar(100) NOT NULL default '',
+
+				ADD `shipping_lastname` varchar(100) NOT NULL default '',
+
+				ADD `billing_firstname` varchar(100) NOT NULL default '',
+
+				ADD `billing_lastname` varchar(100) NOT NULL default '';";
+	}
+	
+	//DEBUG
+	//let's have countries nicely ordered...
+	//dmp(getRows("SELECT * FROM countries ORDER BY name",1));
+	/*
+	foreach ( getRows("SELECT * FROM countries ORDER BY name",1) as $result )
+	{
+		echo "\$sql_query[] = \"INSERT INTO countries VALUES ('', '".$result['name']."', '".$result['country_code']."')\";<br /><br />";
+	}
+	*/
+	
+	// if we don't have the countries table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."countries'") )
+	{
+		$sql_query[] = "
+			
+			CREATE TABLE countries (
+
+			  id int(11) NOT NULL auto_increment,
+
+			  name varchar(200) NOT NULL default '',
+
+			  country_code varchar(10) NOT NULL default '',
+
+			  PRIMARY KEY  (id)
+
+			)";
+		
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Afghanistan', 'AF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Albania', 'AL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Algeria', 'DZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'American Samoa', 'AS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Andorra', 'AD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Angola', 'AO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Anguilla', 'AI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Antarctica', 'AQ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Antigua and Barbuda', 'AG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Argentina', 'AR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Armenia', 'AM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Aruba', 'AW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Australia', 'AU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Austria', 'AT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Azerbaijan', 'AZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bahamas', 'BS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bahrain', 'BH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bangladesh', 'BD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Barbados', 'BB')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Belarus', 'BY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Belgium', 'BE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Belize', 'BZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Benin', 'BJ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bermuda', 'BM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bhutan', 'BT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bolivia', 'BO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bosnia and Herzegowina', 'BA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Botswana', 'BW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bouvet Island', 'BV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Brazil', 'BR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'British Indian Ocean Territory', 'IO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Brunei Darussalam', 'BN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Bulgaria', 'BG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Burkina Faso', 'BF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Burundi', 'BI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cambodia', 'KH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cameroon', 'CM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Canada', 'CA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cape Verde', 'CV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cayman Islands', 'KY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Central African Republic', 'CF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Chad', 'TD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Chile', 'CL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'China', 'CN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Christmas Island', 'CX')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cocos (Keeling) Islands', 'CC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Colombia', 'CO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Comoros', 'KM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Congo', 'CG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cook Islands', 'CK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Costa Rica', 'CR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cote D\'Ivoire', 'CI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Croatia', 'HR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cuba', 'CU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Cyprus', 'CY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Czech Republic', 'CZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Denmark', 'DK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Djibouti', 'DJ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Dominica', 'DM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Dominican Republic', 'DO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'East Timor', 'TP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Ecuador', 'EC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Egypt', 'EG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'El Salvador', 'SV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Equatorial Guinea', 'GQ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Eritrea', 'ER')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Estonia', 'EE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Ethiopia', 'ET')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Falkland Islands (Malvinas)', 'FK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Faroe Islands', 'FO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Fiji', 'FJ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Finland', 'FI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'France', 'FR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'France, Metropolitan', 'FX')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'French Guiana', 'GF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'French Polynesia', 'PF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'French Southern Territories', 'TF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Gabon', 'GA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Gambia', 'GM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Georgia', 'GE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Germany', 'DE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Ghana', 'GH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Gibraltar', 'GI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Greece', 'GR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Greenland', 'GL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Grenada', 'GD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guadeloupe', 'GP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guam', 'GU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guatemala', 'GT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guinea', 'GN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guinea-bissau', 'GW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Guyana', 'GY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Haiti', 'HT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Heard and Mc Donald Islands', 'HM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Honduras', 'HN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Hong Kong', 'HK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Hungary', 'HU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Iceland', 'IS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'India', 'IN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Indonesia', 'ID')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Iran (Islamic Republic of)', 'IR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Iraq', 'IQ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Ireland', 'IE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Israel', 'IL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Italy', 'IT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Jamaica', 'JM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Japan', 'JP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Jordan', 'JO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Kazakhstan', 'KZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Kenya', 'KE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Kiribati', 'KI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Korea, Democratic People\'s Republic of', 'KP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Korea, Republic of', 'KR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Kuwait', 'KW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Kyrgyzstan', 'KG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Lao People\'s Democratic Republic', 'LA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Latvia', 'LV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Lebanon', 'LB')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Lesotho', 'LS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Liberia', 'LR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Libyan Arab Jamahiriya', 'LY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Liechtenstein', 'LI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Lithuania', 'LT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Luxembourg', 'LU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Macau', 'MO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Macedonia, The Former Yugoslav Republic of', 'MK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Madagascar', 'MG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Malawi', 'MW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Malaysia', 'MY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Maldives', 'MV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mali', 'ML')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Malta', 'MT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Marshall Islands', 'MH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Martinique', 'MQ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mauritania', 'MR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mauritius', 'MU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mayotte', 'YT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mexico', 'MX')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Micronesia, Federated States of', 'FM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Moldova, Republic of', 'MD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Monaco', 'MC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mongolia', 'MN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Montserrat', 'MS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Morocco', 'MA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Mozambique', 'MZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Myanmar', 'MM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Namibia', 'NA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Nauru', 'NR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Nepal', 'NP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Netherlands', 'NL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Netherlands Antilles', 'AN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'New Caledonia', 'NC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'New Zealand', 'NZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Nicaragua', 'NI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Niger', 'NE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Nigeria', 'NG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Niue', 'NU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Norfolk Island', 'NF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Northern Mariana Islands', 'MP')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Norway', 'NO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Oman', 'OM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Pakistan', 'PK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Palau', 'PW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Panama', 'PA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Papua New Guinea', 'PG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Paraguay', 'PY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Peru', 'PE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Philippines', 'PH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Pitcairn', 'PN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Poland', 'PL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Portugal', 'PT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Puerto Rico', 'PR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Qatar', 'QA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Reunion', 'RE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Romania', 'RO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Russian Federation', 'RU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Rwanda', 'RW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Saint Kitts and Nevis', 'KN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Saint Lucia', 'LC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Saint Vincent and the Grenadines', 'VC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Samoa', 'WS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'San Marino', 'SM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Sao Tome and Principe', 'ST')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Saudi Arabia', 'SA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Senegal', 'SN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Seychelles', 'SC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Sierra Leone', 'SL')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Singapore', 'SG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Slovakia (Slovak Republic)', 'SK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Slovenia', 'SI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Solomon Islands', 'SB')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Somalia', 'SO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'South Africa', 'ZA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'South Georgia and the South Sandwich Islands', 'GS')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Spain', 'ES')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Sri Lanka', 'LK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'St. Helena', 'SH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'St. Pierre and Miquelon', 'PM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Sudan', 'SD')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Suriname', 'SR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Svalbard and Jan Mayen Islands', 'SJ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Swaziland', 'SZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Sweden', 'SE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Switzerland', 'CH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Syrian Arab Republic', 'SY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Taiwan', 'TW')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tajikistan', 'TJ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tanzania, United Republic of', 'TZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Thailand', 'TH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Togo', 'TG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tokelau', 'TK')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tonga', 'TO')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Trinidad and Tobago', 'TT')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tunisia', 'TN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Turkey', 'TR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Turkmenistan', 'TM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Turks and Caicos Islands', 'TC')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Tuvalu', 'TV')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Uganda', 'UG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Ukraine', 'UA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'United Arab Emirates', 'AE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'United Kingdom', 'GB')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'United States', 'USA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'United States Minor Outlying Islands', 'UM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Uruguay', 'UY')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Uzbekistan', 'UZ')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Vanuatu', 'VU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Vatican City State (Holy See)', 'VA')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Venezuela', 'VE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Viet Nam', 'VN')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Virgin Islands (British)', 'VG')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Virgin Islands (U.S.)', 'VI')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Wallis and Futuna Islands', 'WF')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Western Sahara', 'EH')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Yemen', 'YE')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Yugoslavia', 'YU')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Zaire', 'ZR')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Zambia', 'ZM')";
+
+		$sql_query[] = "INSERT INTO countries VALUES ('', 'Zimbabwe', 'ZW')";
+		
+	}
+	
+	// if we don't have the currencies table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."currencies'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE currencies (
+
+			  id int(11) NOT NULL auto_increment,
+
+			  currency_name varchar(100) NOT NULL default '',
+
+			  currency_code varchar(5) NOT NULL default '',
+
+			  currency_symbol varchar(20) NOT NULL default '',
+
+			  PRIMARY KEY  (id)
+
+			)";
+			
+		$sql_query[] = "INSERT INTO currencies VALUES (1, 'United States Dollars (USD)', 'USD', '$')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (2, 'Euro (EUR)', 'EUR', '€')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (3, 'United Kingdom Pounds (GBP)', 'GBP', '£')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (4, 'Canada Dollars (CAD)', 'CAD', '$')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (5, '----------------', '', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (6, 'Argentina Pesos (ARS)', 'ARS', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (7, 'Australia Dollars (AUD)', 'AUD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (8, 'Bahamas (BSD)', 'BSD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (9, 'Brazil Reais (BRL)', 'BRL', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (10, 'Chile Pesos (CLP)', 'CLP', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (11, 'China Yuan Renminbi (CNY)', 'CNY', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (12, 'Costa Rica Colones (CRC)', 'CRC', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (13, 'Cyprus Pounds (CYP)', 'CYP', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (14, 'Czech Republic Koruny (CZK)', 'CZK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (15, 'Denmark Kroner (DKK)', 'DKK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (16, 'Estonia (EEK)', 'EEK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (17, 'Hong Kong Dollars (HKD)', 'HKD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (18, 'Hungary Forint (HUF)', 'HUF', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (19, 'Iceland Krona (ISK)', 'ISK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (20, 'India Rupees (INR)', 'INR', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (21, 'Jamaica Dollars (JMD)', 'JMD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (22, 'Japan Yen (JPY)', 'JPY', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (23, 'Latvia Lati (LVL)', 'LVL', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (24, 'Lithuania Litai (LTL)', 'LTL', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (25, 'Malta Liri (MTL)', 'MTL', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (26, 'Mexico Pesos (MXN)', 'MXN', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (27, 'Malaysia (MYR)', 'MYR', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (28, 'New Zealand Dollars (NZD)', 'NZD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (29, 'Norway Kroner (NOK)', 'NOK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (30, 'Philippine Peso (PHP)', 'PHP', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (31, 'Poland Zlotych (PLN)', 'PLN', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (32, 'Romania New Leu (RON)', 'RON', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (33, 'Singapore Dollars (SGD)', 'SGD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (34, 'Slovakia Koruny (SKK)', 'SKK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (35, 'Slovenia Tolars (SIT)', 'SIT', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (36, 'South Africa Rand (ZAR)', 'ZAR', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (37, 'South Korea Won (KRW)', 'KRW', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (38, 'Sweden Kronor (SEK)', 'SEK', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (39, 'Switzerland Francs (CHF)', 'CHF', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (40, 'Taiwan New Dollars (TWD)', 'TWD', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (41, 'United Arab Emirates Dirham (AED)', 'AED', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (42, 'Uruguay Pesos (UYU)', 'UYU', '')";
+
+		$sql_query[] = "INSERT INTO currencies VALUES (43, 'Venezuela Bolivar (VEB)', 'VEB', '')";
+	
+	}
+	
+	// if we don't have the shipping_rates table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."shipping_rates'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE shipping_rates (
+
+			  id int(11) NOT NULL auto_increment,
+
+			  title varchar(100) NOT NULL default '',
+
+			  rate decimal(10,0) NOT NULL default '0',
+
+			  start_weight decimal(10,0) NOT NULL default '0',
+
+			  end_weight decimal(10,0) NOT NULL default '0',
+
+			  PRIMARY KEY  (id)
+
+			)";
+		
+		$sql_query[] = "INSERT INTO shipping_rates VALUES (1, 'Light Product Weight', 10, 0, 5)";
+
+		$sql_query[] = "INSERT INTO shipping_rates VALUES (2, 'Heavy Product Weight', 20, 5, 10)";
+	}
+	
+	// if we don't have the shipping_zones table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."shipping_zones'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE shipping_zones (
+
+			  id int(11) NOT NULL auto_increment,
+
+			  name varchar(200) NOT NULL default '',
+
+			  country_id int(11) NOT NULL default '0',
+
+			  parent_zone varchar(200) NOT NULL default '',
+
+			  tax_rate decimal(10,0) NOT NULL default '0',
+
+			  shipping_rate_id int(11) NULL default '0',
+
+			  PRIMARY KEY  (id)
+
+			)";
+		
+		$sql_query[] = "INSERT INTO shipping_zones VALUES (1, 'United States', 1, '', 0, 1)";
+	}
+	
+	// if we don't have the store_settings table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."store_settings'") )
+	{
+		$sql_query[] = "
+			
+			CREATE TABLE store_settings (
+
+			  ssl_url int(11) default NULL,
+
+			  add_to_cart_behavior int(11) default NULL,
+
+			  add_to_cart_section varchar(200) default NULL,
+
+			  cutomer_login_required tinyint(4) default NULL,
+
+			  inventory_management_on tinyint(4) default NULL,
+
+			  hide_inventory_when_depleted tinyint(4) default NULL,
+
+			  show_message_when_depleted tinyint(4) default NULL,
+
+			  depleted_inventory_message varchar(250) default NULL,
+
+			  send_low_inventory_email_notification tinyint(4) default NULL,
+
+			  store_address varchar(150) NOT NULL default '',
+
+			  store_city varchar(200) NOT NULL default '',
+
+			  store_state varchar(100) NOT NULL default '',
+
+			  store_zip varchar(50) NOT NULL default '',
+
+			  store_country varchar(100) NOT NULL default '',
+
+			  owner_email varchar(100) NOT NULL default '',
+
+			  unit_system varchar(100) NOT NULL default '',
+
+			  store_currency varchar(5) NOT NULL default ''
+
+			)";
+	}
+	
+	// if we don't have the zones_rates table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."zones_rates'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE zones_rates (
+
+			  shipping_rate_id int(11) NOT NULL default '0',
+
+			  shipping_zone_id int(11) NOT NULL default '0'
+
+			)";
+			
+		$sql_query[] = "INSERT INTO zones_rates VALUES (1, 1)";
+
+		$sql_query[] = "INSERT INTO zones_rates VALUES (2, 1)";
+	}
+	
+	// if we don't have the product_custom_fields table, let's create it
+	if ( !getRows("SHOW TABLES LIKE '".PFX."product_custom_fields'") )
+	{
+		$sql_query[] = "
+		
+			CREATE TABLE product_custom_fields (
+
+			  id int(11) NOT NULL auto_increment,
+
+			  article_id int(11) NOT NULL default '0',
+
+			  field_label varchar(200) NOT NULL default '',
+
+			  field_value varchar(200) NOT NULL default '',
+
+			  PRIMARY KEY  (id)
+
+			)";
+	}
+		//DEBUG
+		//if ( $sql_query ) dmp($sql_query);
+	
+	// if we have any queries, let's run them
+	if ( is_array($sql_query) )
+	{
+		foreach ($sql_query as $query)
+		{
+			$result = safe_query($query);
+			if (!$result) echo "<h3>There was an error with ln_txp_commerce install. Please check the log for more details.</h3>";
+		}
+	}
+
+}
 
 ?>
